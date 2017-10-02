@@ -1,0 +1,81 @@
+<job id="ZTIPSWrapper">
+   <script language="VBScript" src="ZTIUtility.vbs"/>
+   <script language="VBScript" src="ZTIPSUtility.vbs"/>
+   <script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright (c) Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTIPSWrapper.wsf
+' // 
+' // Version:   1.0
+' // 
+' // Purpose:   MANDATORY
+' // 		Run a PowerShell script as an application
+' // 
+' // Usage:     cscript.exe ZTIPSWrapper.wsf /file:"<script_name>.ps1" /args:"<script_arguments>"
+' // 
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+'//----------------------------------------------------------------------------
+'//  Global Constants
+'//----------------------------------------------------------------------------
+
+
+
+'//----------------------------------------------------------------------------
+'//  Main Class
+'//----------------------------------------------------------------------------
+
+Class ZTIPSWrapper
+
+	'//----------------------------------------------------------------------------
+	'//  Main routine
+	'//----------------------------------------------------------------------------
+	Function Main
+		Dim sScript : sScript = oUtility.Arguments("file")
+		Dim iRetVal, sScriptToLaunch
+		
+		If not oFSO.FileExists(sScript) then
+			'Maybe it's a script located in Tools, Servicing, Scripts, Control, Templates, x86 or amd64 DS folders...
+			'If success, sScriptToLaunch = full path of the script
+			iRetVal = oUtility.FindFile(sScript, sScriptToLaunch)
+			If iRetVal <> Success then
+				oLogging.CreateEntry "Unable to locate file " & sScript, LogTypeError
+				Main = 10901
+				Exit Function
+			End if
+		Else
+			'Script file exists on the working dir
+			sScriptToLaunch = sScript
+		End If
+		
+		'Test if the script to launch is a Powershell script
+		If (oFSO.GetExtensionName(sScriptToLaunch) <> "ps1") Then
+			oLogging.CreateEntry "File is not a Powershell script!", LogTypeError
+			Main = 10901
+			Exit Function
+		End If
+		
+		oLogging.CreateEntry "Script to launch: " & sScriptToLaunch, LogTypeInfo
+		
+		'Set the Powershell arguments as parameters used by RunPowerShellScript function
+		If (oUtility.Arguments("args") <> "") Then
+			oEnvironment.Item("Parameters") = oUtility.Arguments("args")
+			oLogging.CreateEntry "With arguments: " & oUtility.Arguments("args"), LogTypeInfo
+		End If
+		
+		'Run the PS script
+		'Log file = <script_name>.log
+		Main = RunPowerShellScript(sScriptToLaunch, false)
+	End Function
+End Class
+	
+   </script>
+</job>
