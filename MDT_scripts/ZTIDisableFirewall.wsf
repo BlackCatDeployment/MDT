@@ -1,0 +1,41 @@
+<job id="ZTI_DisableFirewall">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTIDisableFirewall.wsf
+' // 
+' // Purpose:   Disable Firewall on the local machine
+' // 
+' // Usage:     cscript.exe [//nologo] ZTIDisableFirewall.wsf [/debug:true]
+' // 
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+Class ZTIDisableFirewall
+
+	Function Main
+	
+		Dim iResult
+	
+		oLogging.CreateEntry "---------------- Initialization ----------------", LogTypeInfo
+		oLogging.CreateEntry "Disable Firewall...", LogTypeInfo
+		
+		If (UCASE(oEnvironment.Item("IsServerCoreOS")) <> "TRUE") then
+			' Disable Firewall
+			oUtility.RunWithHeartbeat "netsh advfirewall set allprofile state off"
+		End if
+
+		Main = SUCCESS
+	End Function
+End class
+
+	</script>
+</job>

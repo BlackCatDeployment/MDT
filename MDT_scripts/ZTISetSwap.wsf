@@ -1,0 +1,104 @@
+<job id="ZTI_SetSwap">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTISetSwap.wsf
+' // 
+' // Purpose:   Modify Virtual memory settings on local computer
+' // 
+' // Usage:     cscript.exe [//nologo] ZTISetSwap.wsf [/initsize:<int>] [/maxsize:<int>] [/debug:true]
+' // 
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+Class ZTISetSwap
+
+	Function Main
+	
+		Dim iResult : iResult = Success
+		Dim sSwapSystemPart : sSwapSystemPart = "C:\pagefile.sys"
+		
+		' Creation of WMI object for manage disks
+		Dim objWMIService : Set objWMIService = GetObject("winmgmts:root\cimv2")
+		
+		oLogging.CreateEntry "---------------- Initialization ----------------", LogTypeInfo
+		'Determine right page file setting
+		Dim colComputerSystem : Set colComputerSystem = objWMIService.ExecQuery("SELECT * FROM Win32_ComputerSystem")
+		Dim objComputerSystem, sPhysicalMemory
+		For Each objComputerSystem In colComputerSystem
+			sPhysicalMemory = objComputerSystem.TotalPhysicalMemory
+		Next
+
+		sPhysicalMemory = Int(sPhysicalMemory / 1048576)
+		oLogging.CreateEntry "Physical memory size on the computer: " & sPhysicalMemory & " MB", LogTypeInfo
+		
+		Dim sSwapInitSize, sSwapMaxSize
+
+		If (oUtility.Arguments.Exists("initsize") and oUtility.Arguments("initsize") <> "") then 
+			sSwapInitSize = Int(oUtility.Arguments("initsize"))
+		Else
+			sSwapInitSize = Int(sPhysicalMemory*1.5) 'This seems some sort of best practice (page = 1.5 * physical)
+		End If
+			
+		If (oUtility.Arguments.Exists("maxsize") and oUtility.Arguments("maxsize") <> "") then
+			sSwapMaxSize = Int(oUtility.Arguments("maxsize"))
+		Else
+			sSwapMaxSize = Int(sPhysicalMemory*1.5) 'This seems some sort of best practice (page = 1.5 * physical)
+		End If
+		
+		oLogging.CreateEntry "Swap Location: " & sSwapSystemPart, LogTypeInfo
+		oLogging.CreateEntry "Swap Initial size to configure: " & sSwapInitSize & " MB", LogTypeInfo
+		oLogging.CreateEntry "Swap Maximum size to configure: " & sSwapMaxSize & " MB", LogTypeInfo
+		
+		'Set SwapSystemPart
+		Dim objPageFile
+		Dim colPageFile : Set colPageFile = objWMIService.ExecQuery("SELECT * FROM Win32_PageFileSetting")	
+
+		If colPageFile.Count = 0 Then
+			oLogging.CreateEntry "Swap automatically managed, creating page file...", LogTypeInfo
+			Set colComputerSystem = objWMIService.ExecQuery("SELECT * FROM Win32_ComputerSystem")
+			For Each objComputerSystem In colComputerSystem
+				On Error Resume Next
+				objComputerSystem.AutomaticManagedPageFile=False
+				objComputerSystem.Put_
+				On error goto 0
+				Err.clear
+			Next
+		Else
+			oLogging.CreateEntry "Setting page file...", LogTypeInfo
+		End If
+
+		On Error Resume Next
+		Set objPageFile = GetObject("WinMgmts:root/cimv2:Win32_PageFileSetting=" & chr(39) & sSwapSystemPart & chr(39))
+		objPageFile.InitialSize = sSwapInitSize
+		objPageFile.MaximumSize = sSwapMaxSize
+
+		objPageFile.Put_
+		If Err.Number <> 0 Then
+			oLogging.CreateEntry Err.Number & " occured. Enough diskspace? http://support.microsoft.com/kb/303800", LogTypeError
+			iResult = Failure
+		End If
+		On error goto 0
+		Err.Clear
+
+		Set objPageFile=Nothing
+
+		'Under Windows 2008 R2:
+		'wmic computersystem Set automaticmanagedpagefile=false
+		'wmic pagefileset set initialsize=sSwapInitSize,maximumsize=sSwapMaxSize
+
+		Main = iResult
+	End Function
+
+End class
+
+	</script>
+</job>

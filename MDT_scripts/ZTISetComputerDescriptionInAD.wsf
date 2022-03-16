@@ -1,0 +1,72 @@
+<job id="ZTISetComputerDescriptionInAD">
+<script language="VBScript" src="ZTIUtility.vbs"/>
+<script language="VBScript">
+
+'//////////////////////////////////////////////////
+'//
+'// Script File:
+'//
+'//   ZTISetComputerDescriptionInAD.wsf
+'//
+'//   This script sets the computer description value 
+'//   on the computer object in Active Directory
+'//
+'//   Author: Florian VALENTE	
+'//
+'//   Disclaimer
+'//   This script is provided "AS IS" without express 
+'//   or implied warranty of any kind
+'//
+'//////////////////////////////////////////////////
+
+
+Const ADS_NAME_INITTYPE_DOMAIN = 1
+Const ADS_NAME_TYPE_NT4 = 3
+Const ADS_SERVER_BIND = 512
+Const ADS_SECURE_AUTHENTICATION = 1
+
+
+
+If oEnvironment.Item("ComputerDescription") = "" Then
+
+	oLogging.CreateEntry "No Computer Description set...", LogTypeInfo
+
+Else
+
+	oLogging.CreateEntry "Computer Description variable set to: " & oEnvironment.Item("ComputerDescription"), LogTypeInfo
+
+	'Open LDAP
+	Set objRoot = GetObject("LDAP:")
+	Set rootDSE = GetObject("LDAP://" & oEnvironment.Item("JoinDomain") & "/rootDSE")
+
+	'Obtain FQDN of nearest domain controller
+	strFQDN = rootDSE.Get("dnsHostName")
+
+	'Open user object via LDAP
+	set Trans = CreateObject("NameTranslate")
+
+	'Specify credentials for NameTranslate to authenticate the domain
+	Trans.InitEx ADS_NAME_INITTYPE_DOMAIN, oEnvironment.Item("DomainAdminDomain"), oEnvironment.Item("DomainAdmin"), oEnvironment.Item("DomainAdminDomain"), oEnvironment.Item("DomainAdminPassword")
+
+	'Find server in the Domain
+	strServerName = oEnvironment.Item("DomainAdminDomain") & "\" & oEnvironment.Item("OSDComputerName") & "$"
+	Trans.Set ADS_NAME_TYPE_NT4, strServerName
+
+	strServerDN = Trans.Get(ADS_NAME_INITTYPE_DOMAIN)
+	'Bind computer object via LDAP using FQDN of nearest domain controller and supplied credentials
+	Set objServer = objRoot.OpenDSObject("LDAP://" & strFQDN & "/" & strServerDN, oEnvironment.Item("DomainAdmin"), oEnvironment.Item("DomainAdminPassword"), ADS_SECURE_AUTHENTICATION + ADS_SERVER_BIND)
+
+	objServer.put "description", oEnvironment.Item("ComputerDescription")
+	objServer.SetInfo
+
+	If Err Then
+		oLogging.CreateEntry "GetObject Error: " & Err.Number & ") (Error Description: " & Err.Description & ").", LogTypeError
+		oLogging.CreateEntry "Could not update object, most likley due to missing permissions in Active Directory.", LogTypeError
+	Else
+		oLogging.CreateEntry "Computer Description is set.", LogTypeInfo
+	End If
+
+End If
+
+</script>
+</job>

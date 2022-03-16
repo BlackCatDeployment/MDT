@@ -1,0 +1,46 @@
+<job id="ZTI_DisableIPv6">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTIDisableIPv6.wsf
+' // 
+' // Purpose:   Disable IPv6 on the local machine
+' // 
+' // Usage:     cscript.exe [//nologo] ZTIDisableIPv6.wsf [/debug:true]
+' // 
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+Class ZTIDisableIPv6
+
+	Function Main
+	
+		Dim iResult
+	
+		oLogging.CreateEntry "---------------- Initialization ----------------", LogTypeInfo
+		oLogging.CreateEntry "Disable IP v6...", LogTypeInfo
+		
+		' Disable IP v6
+		oUtility.RegWrite "HKLM\SYSTEM\CurrentControlSet\Services\tcpip6\Parameters\DisabledComponents",-1
+		
+		If (UCASE(oEnvironment.Item("IsServerCoreOS")) <> "TRUE") then	
+			' Disable 6to4 and isatap interfaces
+			oUtility.RunWithHeartbeat "netsh interface 6to4 set state state=disabled"
+			oUtility.RunWithHeartbeat "netsh interface isatap set state state=disabled"
+		End if
+
+		Main = SUCCESS
+	End Function
+
+End class
+
+	</script>
+</job>

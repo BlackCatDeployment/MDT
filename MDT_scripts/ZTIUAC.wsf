@@ -1,0 +1,39 @@
+<job id="ZTI_UAC">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTIUAC.wsf
+' // 
+' // Purpose:   Disable UAC on the local machine
+' // 
+' // Usage:     cscript.exe [//nologo] ZTIUAC.wsf [/debug:true]
+' // 
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+Class ZTIUAC
+
+	Function Main
+	
+		Dim iResult
+	
+		oLogging.CreateEntry "---------------- Initialization ----------------", LogTypeInfo
+		oLogging.CreateEntry "Disable UAC...", LogTypeInfo
+		
+		' Disable UAC
+		oUtility.RegWrite "HKLM\Software\Microsoft\Windows\CurrentVersion\policies\system\EnableLUA",0
+
+		Main = SUCCESS
+	End Function
+End class
+
+	</script>
+</job>

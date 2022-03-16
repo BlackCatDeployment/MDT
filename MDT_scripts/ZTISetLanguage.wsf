@@ -1,0 +1,147 @@
+<job id="ZTI_SetLanguage">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTISetLanguage.wsf
+' // 
+' // Purpose:   Set keyboard layout on the local machine ONLY UNDER W2K8 OR W2K8 R2
+' // 
+' // Usage:     cscript.exe [//nologo] ZTISetLanguage.wsf /lang:<languageHexCode>,[<languageHexCode>] /setting:<cwn> [/debug:true]
+' // /lang:	Hexa code of the language separated by a comma. Examples: 0000040c for French, 00000409 for English
+' // 		http://chevalierbleu.centerblog.net/1326575-Liste-des-codes-de-langues-Windows
+' // /setting:	c for setting keyboard layout for the current user
+' //			w for setting keyboard layout for the Welcome Screen
+' //			n for setting keyboard layout for new user accounts
+' //			all these options can be merged.
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+Class ZTISetLanguage
+
+	Function Main
+	
+		Dim iResult : iResult = SUCCESS
+		
+		oLogging.CreateEntry "---------------- Initialization ----------------", LogTypeInfo
+		If (oUtility.Arguments.Exists("lang") and oUtility.Arguments("lang") <> "") then
+			Dim tabLanguages : tabLanguages = Split(oUtility.Arguments("lang"), ",")
+			Dim language
+			Dim i
+			If (oUtility.Arguments.Exists("setting") and oUtility.Arguments("setting") <> "") then
+				If (InStr(oUtility.Arguments("setting"), "c") > 0) Then
+					oLogging.CreateEntry "Setting keyboard layout for the current user...", LogTypeInfo
+					Dim sUsersKey : sUsersKey = "HKEY_CURRENT_USER\Keyboard Layout\Preload\"
+					On Error Resume Next
+					i = 1
+					For Each language In tabLanguages
+						oShell.RegWrite sUsersKey & i, language, "REG_SZ" 
+						i = i + 1
+						If Err <> 0 Then
+							oLogging.CreateEntry "Failed to update keyboard layout for the current user", LogTypeError
+							iResult = FAILURE
+							Exit Function
+						Else
+							oLogging.CreateEntry "Keyboard layout defined:" & language, LogTypeInfo
+						End If
+					Next
+					On Error Goto 0
+					Err.Clear
+
+					'Wait
+					WScript.Sleep 1000
+				End If
+
+				If (InStr(oUtility.Arguments("setting"), "w") > 0) Then
+					oLogging.CreateEntry "Setting keyboard layout for the Welcome Screen...", LogTypeInfo
+					sUsersKey = "HKEY_USERS\.DEFAULT\Keyboard Layout\Preload\"
+					On Error Resume Next
+					i = 1
+					For Each language In tabLanguages
+						oShell.RegWrite sUsersKey & i, language, "REG_SZ" 
+						i = i + 1
+						If Err <> 0 Then
+							oLogging.CreateEntry "Failed to update keyboard layout for the Welcome Screen", LogTypeError
+							iResult = FAILURE
+							Exit Function
+						Else
+							oLogging.CreateEntry "Keyboard layout defined:" & language, LogTypeInfo	
+						End If
+					Next
+					On Error Goto 0
+					Err.Clear		
+
+					'Wait
+					WScript.Sleep 1000
+				End If
+				
+
+				If (InStr(oUtility.Arguments("setting"), "n") > 0) Then
+					oLogging.CreateEntry "Setting keyboard layout for new user accounts...", LogTypeInfo
+					Dim sTempHive : sTempHive = """HKEY_USERS\kbl"""
+					Dim sDefaultUserHive : sDefaultUserHive = """%USERPROFILE%\..\Default\NTUSER.DAT"""
+
+					oLogging.CreateEntry "Updating Default Profile",LogTypeInfo
+					oLogging.CreateEntry "Loading the Default User hive",LogTypeInfo 
+
+					On Error Resume Next
+					oShell.Run "reg load " & sTempHive & " " & sDefaultUserHive
+					If Err <> 0 Then
+						oLogging.CreateEntry "Failed to load the registry hive " & sDefaultUserHive, LogTypeError
+						iResult = FAILURE
+						Exit Function
+					End If
+					
+					'Wait during registry hive loading
+					WScript.Sleep 2000
+					
+					oLogging.CreateEntry "Default User Hive Loaded to " & sTempHive, LogTypeInfo
+					oLogging.CreateEntry "Starting Registry Changes... ", LogTypeInfo
+					
+					oLogging.CreateEntry "Setting French and English languages", LogTypeInfo
+					Dim RegPath : RegPath = "HKEY_USERS\kbl\Keyboard Layout\Preload\"
+					i = 1
+					For Each language In tabLanguages
+						oShell.RegWrite RegPath & i, language, "REG_SZ" 
+						i = i + 1
+						If Err <> 0 Then
+							oLogging.CreateEntry "Failed to update keyboard layout for new user accounts", LogTypeError
+							iResult = FAILURE
+							Exit Function
+						Else
+							oLogging.CreateEntry "Keyboard layout defined:" & language, LogTypeInfo
+						End If
+					Next
+					
+					oLogging.CreateEntry "Unloading the Default User hive", LogTypeInfo
+					oShell.Run "reg unload " & sTempHive
+					If Err <> 0 Then
+						oLogging.CreateEntry "Failed to unload the default user registry hive", LogTypeError
+						iResult = FAILURE
+						Exit Function
+					End If
+				End If
+			Else
+				iResult = Failure
+				oLogging.CreateEntry "setting argument is missing or empty!", LogTypeWarning
+			End If
+		Else
+			iResult = Failure
+			oLogging.CreateEntry "lang argument is missing or empty!", LogTypeWarning
+		End If
+		
+		On Error Goto 0
+		Err.Clear		
+		Main = iResult
+	End Function
+End class
+
+	</script>
+</job>

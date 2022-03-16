@@ -1,0 +1,188 @@
+<job id="ZTI_ModifyDriveLetter">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTIModifyDriveLetter.wsf
+' // 
+' // Purpose:   Modify Drive letter on the local machine
+' // 
+' // Usage:     cscript.exe [//nologo] ZTIModifyDriveLetter.wsf /name:<name> /letter:<letter> [/isUSB] [/debug:true]
+' // /isUSB: Specify if drive to rename is an USB Disk.
+' //		 Servers provided with SD Card Reader are often shipped with SD Card not named.
+' //		 In this case, the script renames Removable Disk with the name and letter defined in parameters.
+' // 
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+Class ZTIModifyDriveLetter
+
+	' Looks for a value in an array
+	Function ArrayContains(arrStrings, strValue)
+		Dim i
+		
+		ArrayContains = false
+		For i = 0 to UBound(arrStrings)
+			If arrStrings(i) = strValue Then
+				ArrayContains = true
+				Exit For
+			End If
+		Next
+	End Function
+
+
+	Function Main
+	
+		Dim iResult : iResult = Success
+		Dim objWMIService, colDrives, colVolumes, objDrive, objVolume, i
+		
+		' Creation of WMI object for manage disks
+		Set objWMIService = GetObject("winmgmts:root\cimv2")
+		
+		oLogging.CreateEntry "---------------- Initialization ----------------", LogTypeInfo
+		' Get all drives currently in use
+		Set colDrives = objWMIService.ExecQuery("Select * from Win32_LogicalDisk")
+		ReDim arrUsedDrives(colDrives.Count - 1)
+		i = 0
+		For Each objDrive in colDrives
+			arrUsedDrives(i) = objDrive.DeviceID
+			i = i + 1
+		Next
+
+		If (oUtility.Arguments.Exists("name") and oUtility.Arguments("name") <> "") then
+			Dim strDriveName : strDriveName = oUtility.Arguments("name")
+			' Check if drive is named as input argument
+			Set colVolumes = objWMIService.ExecQuery("Select Label from Win32_Volume Where Label = '" & strDriveName & "'")
+			If (colVolumes.Count = 0) Then ' If no drive is detected with the name filled
+				If (oUtility.Arguments.Exists("isUSB")) Then ' Check if argument "isUSB" is present
+					' Check if an USB drive is present on the machine
+					' Drive types: 2 -> USB, 3 -> HDD, 5 -> DVD
+					Set colVolumes = objWMIService.ExecQuery("Select * from Win32_Volume Where DriveType = 2")
+					If (colVolumes.Count = 0) Then
+						oLogging.CreateEntry "No USB drive detected! No action to do", LogTypeWarning
+						Exit Function
+					Else
+						' For each USB Drive detected (only the first is updated)
+						For Each objVolume in colVolumes
+							On Error Resume Next
+							' Check if USB Drive File System is FAT32 because the name is limited at 8 characters
+							If (objVolume.FileSystem = "FAT32" and Len(strDriveName > 8)) Then 
+								strDriveName = "SDCARD" ' Modify argument with a name of 8 characters
+								oLogging.CreateEntry "FAT32 drive detected, name argument modified to: " & strDriveName, LogTypeInfo
+							End If
+							objVolume.Label = strDriveName ' Rename the USB drive
+							objVolume.Put_
+							If Err <> 0 Then
+								oLogging.CreateEntry "USB drive name not modified! Err " & Err, LogTypeError
+								Exit Function
+							Else
+								oLogging.CreateEntry "USB drive named as: " & strDriveName, LogTypeInfo
+							End If
+							
+							' Wait a few seconds to ensure USB drive is correctly renamed.
+							WScript.Sleep 2000
+
+							On Error Goto 0
+							Err.Clear
+							Exit For
+						Next
+					End If
+				Else
+					oLogging.CreateEntry "No drive is named """ & strDriveName & """! No action to do", LogTypeWarning
+					Exit Function
+				End If
+			End If
+
+			If (oUtility.Arguments.Exists("letter") and oUtility.Arguments("letter") <> "") then
+				Dim strDriveLetter : strDriveLetter = UCase(oUtility.Arguments("letter"))
+				' Check that the drive letter contains ":"
+				If (InStr(strDriveLetter, ":") = 0) Then strDriveLetter = strDriveLetter & ":"
+				
+				' Check if letter is already assigned to the correct drive
+				Set colVolumes = objWMIService.ExecQuery("Select Label from Win32_Volume Where Name = '" & strDriveLetter & "\\' And Label = '" & strDriveName & "'")
+				If (colVolumes.Count = 0) Then
+					' Check each drive currently in use
+					If ArrayContains(arrUsedDrives, strDriveLetter) Then
+						' We found a drive that cannot be used
+						oLogging.CreateEntry strDriveLetter & " is in use, and it shouldn't", LogTypeInfo
+					
+						' Find next available drive
+						Dim strTmpDriveLetter : strTmpDriveLetter = ""
+						For i = 68 to 90 ' From 'D' to 'Z'
+							Dim strCrtDriveLetter : strCrtDriveLetter = CStr(Chr(i)) & ":"
+							If (Not ArrayContains(arrUsedDrives, strCrtDriveLetter)) Then
+								' We found it
+								strTmpDriveLetter = strCrtDriveLetter
+								Exit For
+							End If 
+						Next
+					
+						If strTmpDriveLetter = "" Then
+							' There are no more available drives!
+							oLogging.CreateEntry "There are no more available drives in the system!!", LogTypeError
+							iResult = Failure
+							Exit Function
+						Else
+							' Temporarily modify the existing drive letter
+							oLogging.CreateEntry "Modifying " & strDriveLetter & " Drive letter by " & strTmpDriveLetter & "...", LogTypeInfo
+							Set colVolumes = objWMIService.ExecQuery("Select * from Win32_Volume Where Name = '" & strDriveLetter & "\\'")
+							If (colVolumes.Count = 0) Then oLogging.CreateEntry "Drive letter not modified because is already assigned to a network share! Ignore next error", LogTypeWarning
+							For Each objVolume in colVolumes
+								On Error Resume Next
+								objVolume.DriveLetter = strTmpDriveLetter
+								objVolume.Put_
+								If Err <> 0 Then
+									oLogging.CreateEntry "Drive letter not modified! Err " & Err, LogTypeError
+								Else
+									oLogging.CreateEntry "Temporary assignment: " & strTmpDriveLetter, LogTypeInfo
+								End If
+								On Error Goto 0
+								Err.Clear
+							Next
+													
+							' Wait a few seconds to ensure diskpart commands have been flushed to disk.
+							WScript.Sleep 5000
+						End If
+					End If
+				
+					' Modify the drive letter using the disk name
+					oLogging.CreateEntry "Modifying " & strDriveName & " Drive letter by " & strDriveLetter & "...", LogTypeInfo
+					Set colVolumes = objWMIService.ExecQuery("Select * from Win32_Volume Where Label = '" & strDriveName & "'")
+					For Each objVolume in colVolumes
+						On Error Resume Next
+						objVolume.DriveLetter = strDriveLetter
+						objVolume.Put_
+						If Err <> 0 Then
+							oLogging.CreateEntry "Drive letter not modified! Maybe already used by a network share.", LogTypeError
+						Else
+							oLogging.CreateEntry "Drive letter modified successfully", LogTypeInfo
+						End If
+						On Error Goto 0
+						Err.Clear
+					Next
+				Else
+					oLogging.CreateEntry strDriveLetter & " is already assigned to " & strDriveName, LogTypeInfo
+				End If
+			Else
+				oLogging.CreateEntry "letter argument is missing or empty!", LogTypeError
+				iResult = Failure
+			End If
+		Else
+			oLogging.CreateEntry "name argument is missing or empty!", LogTypeError
+			iResult = Failure
+		End If
+
+		Main = iResult
+	End Function
+
+End class
+
+	</script>
+</job>

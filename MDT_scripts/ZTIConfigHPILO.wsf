@@ -1,0 +1,77 @@
+<job id="ZTI_ConfigHPTeaming">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTIConfigHPILO.wsf
+' // 
+' // Purpose:   Configure HP ILO accounts
+' // 
+' // Usage:     cscript.exe [//nologo] ZTIConfigHPILO.wsf /file:<filename> [/debug:true]
+' // 
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+Class ZTIConfigHPILO
+
+	Function ExecCmd(strCmd)
+		Dim oExec : Set oExec = oShell.Exec(strCmd)
+
+		' Log Command.
+		Dim sLine
+		do while oExec.Status = 0 or not oExec.StdOut.atEndOfStream
+			If not oExec.StdOut.atEndOfStream then
+				sLine = oExec.StdOut.ReadLine
+				oLogging.CreateEntry "    EXEC > " & sLine, LogTypeInfo
+			End If
+			If not oExec.StdErr.atEndOfStream then
+				sLine = oExec.StdErr.ReadLine
+				oLogging.CreateEntry "    EXEC > " & sLine, LogTypeError
+			End If
+		loop
+		If oExec.ExitCode <> 0 then
+			oLogging.CreateEntry "EXEC returned error = " & oExec.ExitCode, LogTypeError
+			ExecCmd = Failure
+		Else
+			oLogging.CreateEntry "EXEC returned SUCCESS! " , LogTypeInfo
+			ExecCmd = Success
+		End If
+	End Function
+
+
+	Function Main
+	
+		'Retrieving script execution path
+		Dim strScriptPath : strScriptPath = Left(WScript.ScriptFullName, InStrRev(WScript.ScriptFullName, "\")) 
+
+		Dim iResult : iResult = Success
+	
+		oLogging.CreateEntry "---------------- Initialization ----------------", LogTypeInfo
+		If (oUtility.Arguments.Exists("file") and oUtility.Arguments("file") <> "") then
+			Dim strFilePath : strFilePath = strScriptPath & oUtility.Arguments("file")
+
+			If oFSO.FileExists(strFilePath) Then
+				oLogging.CreateEntry "Manage ILO accounts on the server...", LogTypeInfo
+				iResult = ExecCmd("""C:\Program Files\HP\hponcfg\hponcfg.exe"" /f """ & strFilePath & """")
+			Else
+				oLogging.CreateEntry "Configuration file not exists!", LogTypeWarning
+				iResult = Failure
+			End If
+		Else
+			oLogging.CreateEntry "file argument is missing or empty!", LogTypeWarning
+			iResult = Failure
+		End If
+		Main = iResult
+	End Function
+
+End class
+
+	</script>
+</job>

@@ -1,0 +1,48 @@
+<job id="ZTI_RenameNetworkAdapter">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTIRenameNetworkAdapter.wsf
+' // 
+' // Purpose:   Rename Network Adapter on the local machine
+' // 
+' // Usage:     cscript.exe [//nologo] ZTIRenameNetworkAdapter.wsf /oldname:<oldname> /newname:<newname> [/debug:true]
+' // 
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+Class ZTIRenameNetworkAdapter
+
+	Function Main
+	
+		Dim iResult : iResult = Success
+	
+		oLogging.CreateEntry "---------------- Initialization ----------------", LogTypeInfo
+		If (oUtility.Arguments.Exists("oldname") and oUtility.Arguments("oldname") <> "") then
+			If (oUtility.Arguments.Exists("newname") and oUtility.Arguments("newname") <> "") then
+				oLogging.CreateEntry "Rename Network Adapter (" & oUtility.Arguments("oldname") & ") to " & oUtility.Arguments("newname") & "...", LogTypeInfo
+				oUtility.RunWithHeartbeat "netsh interface set interface name=""" & oUtility.Arguments("oldname") & """ newname=""" & oUtility.Arguments("newname") & """"
+			Else
+				iResult = Failure
+				oLogging.CreateEntry "newname argument is missing or empty!", LogTypeWarning
+			End If
+		Else
+			iResult = Failure
+			oLogging.CreateEntry "oldname argument is missing or empty!", LogTypeWarning
+		End If
+
+		Main = iResult
+	End Function
+
+End class
+
+	</script>
+</job>

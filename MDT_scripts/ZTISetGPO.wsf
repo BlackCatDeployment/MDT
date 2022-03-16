@@ -1,0 +1,91 @@
+<job id="ZTI_SetGPO">
+	<script language="VBScript" src="ZTIUtility.vbs"/>
+	<script language="VBScript">
+
+' // ***************************************************************************
+' // 
+' // Copyright Florian VALENTE.  All rights reserved.
+' // 
+' // Microsoft Deployment Toolkit Solution Accelerator
+' //
+' // File:      ZTISetGPOWSUS.wsf
+' // 
+' // Purpose:   Set Machine GPO on the local machine by using a custom .pol file
+' // 
+' // Usage:     cscript.exe [//nologo] ZTISetGPO.wsf /file:<filename.pol> /GPOType:<Machine/User> [/debug:true]
+' // 
+' // ***************************************************************************
+
+Option Explicit
+RunNewInstance
+
+Class ZTISetGPO
+
+	Function Main
+	
+		Dim iResult : iResult = Success
+
+		oLogging.CreateEntry "---------------- Initialization ----------------", LogTypeInfo
+		If (oUtility.Arguments.Exists("file") and oUtility.Arguments("file") <> "") then
+			Dim strFilePath : strFilePath = oUtility.ScriptDir & "\" & oUtility.Arguments("file")
+
+			If oFSO.FileExists(strFilePath) Then
+				oLogging.CreateEntry "File " & oUtility.Arguments("file") & " found", LogTypeInfo
+				If (oUtility.Arguments.Exists("GPOType") and oUtility.Arguments("GPOType") <> "") then
+					If (oUtility.Arguments("GPOType") = "Machine" Or oUtility.Arguments("GPOType") = "User") Then
+						oLogging.CreateEntry "Applying " & oUtility.Arguments("GPOType") & " GPO...", LogTypeInfo
+						Dim strGPOPath : strGPOPath = oShell.ExpandEnvironmentStrings("%SYSTEMROOT%") & "\System32\GroupPolicy\" & oUtility.Arguments("GPOType")
+				
+						On Error Resume Next
+						'Create Machine or User folder if not exists
+						If Not oFSO.FolderExists(strGPOPath) Then
+							oFSO.CreateFolder(strGPOPath)
+						End If
+
+						'Delete Registry.pol file if already exists
+						If oFSO.FileExists(strGPOPath & "\Registry.pol") Then
+							oLogging.CreateEntry "Registry.pol file already exists, deletion", LogTypeInfo
+							oFSO.DeleteFile strGPOPath & "\Registry.pol", True
+						End If
+
+						'Copy custom .pol to specific grouppolicy folder
+						oFSO.CopyFile strFilePath, strGPOPath & "\Registry.pol", True
+	
+						If Err <> 0 Then
+							oLogging.CreateEntry "Failed to apply GPO!", LogTypeError
+							iResult = Failure
+						Else
+							oLogging.CreateEntry "GPO applied successfully", LogTypeInfo
+							'Delete the ReadOnly attribute
+							Dim oFile : Set oFile = oFSO.GetFile(strGPOPath & "\Registry.pol")
+							If oFile.Attributes AND 1 Then
+ 								oFile.Attributes = oFile.Attributes XOR 1
+							End If
+						End If
+
+						On error goto 0
+						Err.Clear
+					Else
+						oLogging.CreateEntry "GPOType argument must be Machine or User!", LogTypeWarning
+						iResult = Failure
+					End If
+				Else
+					oLogging.CreateEntry "GPOType argument is missing or empty!", LogTypeWarning
+					iResult = Failure
+				End If
+			Else
+				oLogging.CreateEntry "File " & oUtility.Arguments("file") & " not found!", LogTypeWarning
+				iResult = Failure
+			End If
+		Else
+			oLogging.CreateEntry "file argument is missing or empty!", LogTypeWarning
+			iResult = Failure
+		End If
+
+		Main = iResult
+	End Function
+
+End class
+
+	</script>
+</job>
